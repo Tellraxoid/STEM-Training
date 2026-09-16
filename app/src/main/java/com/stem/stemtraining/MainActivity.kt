@@ -161,7 +161,9 @@ val exerciseCatalog = listOf(
     var details by remember(exercise.name){mutableStateOf(false)}
     val prefs=context.getSharedPreferences("stem_settings",0)
     val goal=TrainingGoal.from(prefs.getString("training_goal",null))
-    val recommendation=workoutRecommendation(previousSets,goal,prefs.getString("manual_weight","")?.replace(',','.')?.toDoubleOrNull(),prefs.getFloat("weight_step",2.5f).toDouble(),exerciseRepRange(exercise.name,goal))
+    val weightStep=prefs.getFloat("weight_step",2.5f).toDouble()
+    val recommendation=workoutRecommendation(previousSets,goal,prefs.getString("manual_weight","")?.replace(',','.')?.toDoubleOrNull(),weightStep,exerciseRepRange(exercise.name,goal))
+    val warmupPlan=recommendation.weight?.let{working->(0..2).mapNotNull{recommendedWarmupWeight(working,it,weightStep)}}?:emptyList()
     Card(Modifier.fillMaxWidth(),elevation=CardDefaults.cardElevation(defaultElevation=if(dragging)10.dp else 0.dp),colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.surface)){Column(Modifier.padding(18.dp)){
         Row(verticalAlignment=Alignment.CenterVertically){
             Surface(shape=MaterialTheme.shapes.small,color=androidx.compose.ui.graphics.Color.White){
@@ -176,6 +178,7 @@ val exerciseCatalog = listOf(
             Text("РЕКОМЕНДАЦИЯ · ${goal.title}",style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.secondary)
             Text("${recommendation.weight?.let{"${number(it)} кг · "}?:"Подберите рабочий вес · "}${recommendation.sets} подхода · ${recommendation.recommendedReps} повторений",style=MaterialTheme.typography.titleSmall)
             Text("Рабочий диапазон: ${recommendation.reps.first}–${recommendation.reps.last}",style=MaterialTheme.typography.labelSmall)
+            if(warmupPlan.isNotEmpty())Text("Разминка: ${warmupPlan.joinToString(" → "){"${number(it)} кг"}}",style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.secondary)
             recommendation.relativeLoadPercent?.let{Text("Рабочий вес ≈ $it% массы тела",style=MaterialTheme.typography.labelSmall)}
             Text(recommendation.reason,style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
         }}
