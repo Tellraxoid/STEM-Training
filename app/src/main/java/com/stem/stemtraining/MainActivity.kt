@@ -19,6 +19,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.material.icons.Icons
@@ -82,8 +83,11 @@ val exerciseCatalog = listOf(
     val completed by dao.observeCompletedWorkouts().collectAsState(initial=emptyList())
     val active by dao.observeActiveWorkout().collectAsState(initial = null); val id = active?.id ?: -1
     val exercises by remember(id) { dao.observeExercises(id) }.collectAsState(initial = emptyList()); val sets by remember(id) { dao.observeSets(id) }.collectAsState(initial = emptyList())
+    val trainingListState=rememberLazyListState()
+    var restoredLastExercise by remember(id){mutableStateOf(false)}
+    LaunchedEffect(id,exercises,sets){if(!restoredLastExercise&&id>=0&&exercises.isNotEmpty()&&sets.isNotEmpty()){val lastExerciseId=sets.maxByOrNull{it.createdAt}?.exerciseId;val lastIndex=exercises.indexOfFirst{it.id==lastExerciseId};if(lastIndex>=0)trainingListState.scrollToItem(3+lastIndex);restoredLastExercise=true}}
     var catalog by remember { mutableStateOf(false) }; var setFor by remember { mutableStateOf<ExerciseEntity?>(null) }; var editSet by remember { mutableStateOf<WorkoutSetEntity?>(null) }; var editExercise by remember { mutableStateOf<ExerciseEntity?>(null) }; var replaceExercise by remember { mutableStateOf<ExerciseEntity?>(null) }; var finish by remember { mutableStateOf(false) }; var notesEditor by remember { mutableStateOf(false) }
-    LazyColumn(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    LazyColumn(Modifier.fillMaxSize().padding(horizontal = 16.dp),state=trainingListState, verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item { Spacer(Modifier.height(18.dp)); Row(verticalAlignment = Alignment.CenterVertically) { Image(painterResource(R.drawable.stem_training_logo),"Логотип S.T.E.M. Training",Modifier.size(62.dp),contentScale=ContentScale.Fit);Spacer(Modifier.width(12.dp));Column(Modifier.weight(1f)) { Text("S.T.E.M. Training", color = MaterialTheme.colorScheme.secondary, style = MaterialTheme.typography.titleMedium); Text("SIC PARVIS MAGNA",style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant);Text(if (active == null) "Тренировка" else "В процессе", style = MaterialTheme.typography.headlineSmall) }; Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.primaryContainer) { Icon(Icons.Rounded.Bolt, null, Modifier.padding(12.dp)) } } }
         if(active==null && completed.isNotEmpty())item{WorkoutCoach(completed.first().id)}
         if (active == null) item { Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) { Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) { Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.primaryContainer) { Icon(Icons.Rounded.FitnessCenter, null, Modifier.padding(14.dp).size(28.dp)) }; Text("Готовы стать сильнее?", style = MaterialTheme.typography.titleLarge); Text("Начните свободную тренировку или следуйте сохранённой программе.", color = MaterialTheme.colorScheme.onSurfaceVariant); Button({ scope.launch { dao.insertWorkout(WorkoutEntity()) } }, Modifier.fillMaxWidth().height(52.dp)) { Icon(Icons.Rounded.PlayArrow, null); Spacer(Modifier.width(8.dp)); Text("Начать тренировку") }; OutlinedButton(onPrograms, Modifier.fillMaxWidth().height(52.dp)) { Icon(Icons.Rounded.ViewList, null); Spacer(Modifier.width(8.dp)); Text("Выбрать программу") } } } }
@@ -114,7 +118,7 @@ val exerciseCatalog = listOf(
                 }) {
                     if(previousLinked || exercise.supersetNext)Text(if(previousLinked)"СУПЕРСЕТ · A2" else "СУПЕРСЕТ · A1",color=MaterialTheme.colorScheme.secondary)
                     ExerciseCard(exercise,sets.filter{it.exerciseId==exercise.id},{setFor=exercise},{editSet=it},{editExercise=exercise},dragging=dragging)
-                    if(next!=null && !previousLinked && !next.supersetNext)TextButton({scope.launch{dao.updateExercise(exercise.copy(supersetNext=!exercise.supersetNext))}}){Text(if(exercise.supersetNext)"Разъединить суперсет" else "Суперсет со следующим упражнением")}
+                    if(next!=null && !previousLinked && !next.supersetNext)TextButton({scope.launch{dao.updateExercise(exercise.copy(supersetNext=!exercise.supersetNext))}},Modifier.fillMaxWidth()){Icon(Icons.Rounded.SwapVert,null);Spacer(Modifier.width(6.dp));Text(if(exercise.supersetNext)"СУПЕРСЕТ · разъединить" else "Объединить в суперсет")}
                 }
             }
             item { Button({ catalog = true }, Modifier.fillMaxWidth().height(52.dp)) { Icon(Icons.Rounded.Add, null); Spacer(Modifier.width(8.dp)); Text("Добавить упражнение") }; OutlinedButton({ finish = true }, Modifier.fillMaxWidth().height(52.dp)) { Icon(Icons.Rounded.Check, null); Spacer(Modifier.width(8.dp)); Text("Завершить тренировку") }; Spacer(Modifier.height(16.dp)) }
@@ -126,14 +130,16 @@ val exerciseCatalog = listOf(
         val prefs=context.getSharedPreferences("stem_settings",0)
         val previousSets by remember(exercise.name){dao.observePreviousWorkingSets(exercise.name)}.collectAsState(initial=emptyList())
         val weightStep=prefs.getFloat("weight_step",2.5f).toDouble()
-        val recommendedWeight=workoutRecommendation(previousSets,TrainingGoal.from(prefs.getString("training_goal",null)),prefs.getString("manual_weight","")?.replace(',','.')?.toDoubleOrNull(),weightStep).weight
+        val goal=TrainingGoal.from(prefs.getString("training_goal",null))
+        val recommendation=workoutRecommendation(previousSets,goal,prefs.getString("manual_weight","")?.replace(',','.')?.toDoubleOrNull(),weightStep,exerciseRepRange(exercise.name,goal))
+        val recommendedWeight=recommendation.weight
         val warmupWeight=recommendedWarmupWeight(recommendedWeight,sets.count{it.exerciseId==exercise.id&&it.isWarmup},weightStep)
         key(exercise.id){SetDialog(lastSet,{setFor=null},save={weight,reps,rir,warmup->scope.launch{
             dao.insertSet(WorkoutSetEntity(exerciseId=exercise.id,weight=weight,reps=reps,rir=rir,isWarmup=warmup))
             val next=exercises.getOrNull(exercises.indexOf(exercise)+1)
             if(!warmup && exercise.supersetNext && next!=null){RestAlarm.cancel(context);setFor=next}
             else {if(!warmup)RestAlarm.start(context,System.currentTimeMillis()+context.getSharedPreferences("stem_settings",0).getInt("rest",90)*1000L);setFor=null}
-        }},isNew=true,recommendedWeight=recommendedWeight,recommendedReps=workoutRecommendation(previousSets,TrainingGoal.from(prefs.getString("training_goal",null)),prefs.getString("manual_weight","")?.replace(',','.')?.toDoubleOrNull(),weightStep).recommendedReps,recommendedWarmupWeight=warmupWeight)}
+        }},isNew=true,recommendedWeight=recommendedWeight,recommendedReps=recommendation.recommendedReps,recommendedWarmupWeight=warmupWeight)}
     }
     editSet?.let { set -> SetDialog(set,{editSet=null},{weight,reps,rir,warmup->scope.launch{dao.updateSet(set.copy(weight=weight,reps=reps,rir=rir,isWarmup=warmup))};editSet=null},{scope.launch{dao.deleteSet(set.id)};editSet=null}) }
     editExercise?.let { exercise -> ExerciseDialog(exercise, { editExercise = null }, { name -> scope.launch { dao.updateExercise(exercise.copy(name = name)) }; editExercise = null }, { scope.launch { dao.deleteExercise(exercise.id) }; editExercise = null }, { editExercise = null; replaceExercise = exercise }) }
@@ -155,7 +161,7 @@ val exerciseCatalog = listOf(
     var details by remember(exercise.name){mutableStateOf(false)}
     val prefs=context.getSharedPreferences("stem_settings",0)
     val goal=TrainingGoal.from(prefs.getString("training_goal",null))
-    val recommendation=workoutRecommendation(previousSets,goal,prefs.getString("manual_weight","")?.replace(',','.')?.toDoubleOrNull(),prefs.getFloat("weight_step",2.5f).toDouble())
+    val recommendation=workoutRecommendation(previousSets,goal,prefs.getString("manual_weight","")?.replace(',','.')?.toDoubleOrNull(),prefs.getFloat("weight_step",2.5f).toDouble(),exerciseRepRange(exercise.name,goal))
     Card(Modifier.fillMaxWidth(),elevation=CardDefaults.cardElevation(defaultElevation=if(dragging)10.dp else 0.dp),colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.surface)){Column(Modifier.padding(18.dp)){
         Row(verticalAlignment=Alignment.CenterVertically){
             Surface(shape=MaterialTheme.shapes.small,color=androidx.compose.ui.graphics.Color.White){

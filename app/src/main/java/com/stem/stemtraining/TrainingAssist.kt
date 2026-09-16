@@ -145,7 +145,7 @@ class RestAlarmReceiver:BroadcastReceiver(){override fun onReceive(context:Conte
 @Composable fun EffortButtons(set:WorkoutSetEntity){
     if(set.isWarmup)return
     val context=LocalContext.current;val dao=remember{TrainingDatabase.getInstance(context).trainingDao()};val scope=rememberCoroutineScope()
-    Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(4.dp)){listOf("Легко","Нормально","Тяжело","До отказа").forEach{label->FilterChip(modifier=Modifier.weight(1f),selected=set.effort==label,onClick={scope.launch{dao.updateSet(set.copy(effort=if(set.effort==label)null else label))}},label={Text(label,maxLines=1,style=MaterialTheme.typography.labelSmall)})}}
+    Column(verticalArrangement=Arrangement.spacedBy(4.dp)){listOf("Легко","Нормально","Тяжело","До отказа").chunked(2).forEach{labels->Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(6.dp)){labels.forEach{label->FilterChip(modifier=Modifier.weight(1f),selected=set.effort==label,onClick={scope.launch{dao.updateSet(set.copy(effort=if(set.effort==label)null else label))}},label={Text(label,maxLines=1,style=MaterialTheme.typography.labelSmall)})}}}}
 }
 
 fun coachAdvice(sets:List<WorkoutSetEntity>,targetReps:Int?):String {
