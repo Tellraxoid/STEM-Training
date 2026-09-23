@@ -71,7 +71,7 @@ data class ProgramWithExercises(@Embedded val program: ProgramEntity, @Relation(
     @Transaction suspend fun saveProgram(program: ProgramEntity, items: List<ProgramExerciseEntity>): Long { val id = if (program.id == 0L) insertProgram(program) else { updateProgram(program); clearProgramExercises(program.id); program.id }; insertProgramExercises(items.mapIndexed { index, item -> item.copy(id = 0, programId = id, position = index) }); return id }
 }
 
-@Database(entities = [WorkoutEntity::class, ExerciseEntity::class, WorkoutSetEntity::class, ProgramEntity::class, ProgramExerciseEntity::class], version = 8, exportSchema = false)
+@Database(entities = [WorkoutEntity::class, ExerciseEntity::class, WorkoutSetEntity::class, ProgramEntity::class, ProgramExerciseEntity::class], version = 9, exportSchema = false)
 abstract class TrainingDatabase : RoomDatabase() {
     abstract fun trainingDao(): TrainingDao
     companion object {
@@ -99,6 +99,10 @@ abstract class TrainingDatabase : RoomDatabase() {
             db.execSQL("UPDATE exercises SET name = 'Тяга штанги в наклоне' WHERE name = 'Тяга в наклоне · штанга'")
             db.execSQL("UPDATE program_exercises SET name = 'Тяга штанги в наклоне' WHERE name = 'Тяга в наклоне · штанга'")
         } }
-        fun getInstance(context: Context): TrainingDatabase = instance ?: synchronized(this) { instance ?: Room.databaseBuilder(context.applicationContext, TrainingDatabase::class.java, "stem_training.db").addMigrations(migration1To2, migration2To3, migration3To4, migration4To5, migration5To6, migration6To7, migration7To8).build().also { instance = it } }
+        private val migration8To9 = object : Migration(8, 9) { override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("UPDATE exercises SET name = 'Скручивания в блоке на пресс' WHERE name = 'Скручивания в блоке'")
+            db.execSQL("UPDATE program_exercises SET name = 'Скручивания в блоке на пресс' WHERE name = 'Скручивания в блоке'")
+        } }
+        fun getInstance(context: Context): TrainingDatabase = instance ?: synchronized(this) { instance ?: Room.databaseBuilder(context.applicationContext, TrainingDatabase::class.java, "stem_training.db").addMigrations(migration1To2, migration2To3, migration3To4, migration4To5, migration5To6, migration6To7, migration7To8, migration8To9).build().also { instance = it } }
     }
 }
