@@ -13,6 +13,7 @@ import androidx.annotation.DrawableRes
     name.contains("горизонтальная рычажная тяга",true)->R.drawable.exercise_horizontal_lever_row
     name.contains("подъём рук в стороны",true)&&name.contains("нижний блок",true)->R.drawable.exercise_low_cable_lateral_raise
     name.contains("жим над головой",true)&&name.contains("Смита",true)->R.drawable.exercise_smith_overhead_press
+    name.contains("скручивания в блоке",true)&&name.contains("сидя",true)->R.drawable.exercise_seated_cable_crunch
     name.contains("скручивания в блоке",true)->R.drawable.exercise_cable_crunch
     name.contains("скручивания на обратной скамье",true)->R.drawable.exercise_decline_crunch
     name.contains("подъём ног в висе на брусьях",true)->R.drawable.exercise_parallel_bar_leg_raise
