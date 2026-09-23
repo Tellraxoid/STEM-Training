@@ -3,6 +3,7 @@
     xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.health.READ_WEIGHT" />
     <uses-permission android:name="android.permission.health.READ_BODY_FAT" />
     <uses-permission android:name="android.permission.health.READ_LEAN_BODY_MASS" />
@@ -15,7 +16,6 @@
         <provider android:authorities="com.stem.nutrition.summary" />
     </queries>
 
-    <permission android:name="com.stem.stemtraining.permission.READ_SUMMARY" android:protectionLevel="normal" />
     <application
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
@@ -25,7 +25,6 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.STEMTraining">
-        <provider android:name=".TrainingSummaryProvider" android:authorities="com.stem.stemtraining.summary" android:exported="true" android:permission="com.stem.stemtraining.permission.READ_SUMMARY" />
         <receiver android:name=".RestAlarmReceiver" android:exported="false" />
         <activity android:name=".HealthPrivacyActivity" android:exported="true">
             <intent-filter><action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" /></intent-filter>
