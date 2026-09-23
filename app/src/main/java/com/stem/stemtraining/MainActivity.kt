@@ -64,7 +64,7 @@ private enum class Page(val title: String) { TRAINING("Тренировка"), H
             when (page) {
                 Page.TRAINING -> TrainingScreen(onPrograms = { page = Page.PROGRAMS })
                 Page.HISTORY -> HistoryScreen()
-                Page.PROGRAMS -> ProgramsScreen(onStart = { program -> scope.launch { startProgram(dao, program); page = Page.TRAINING } })
+                Page.PROGRAMS -> ProgramsScreen(onStart = { program -> scope.launch { prefs.edit().putBoolean("starting_workout",true).apply();val id=startProgram(dao, program);prefs.edit().putLong("active_workout_id",id).remove("starting_workout").apply();page = Page.TRAINING } })
                 Page.STATS -> StatisticsScreen()
                 Page.SETTINGS -> SettingsScreen()
             }
@@ -77,7 +77,7 @@ private suspend fun seedPrograms(dao: TrainingDao) {
     if (dao.programCount() != 0) return
     starterPrograms.forEach { starter -> dao.saveProgram(ProgramEntity(name = starter.name), starter.exercises.mapIndexed { index, name -> ProgramExerciseEntity(programId=0,name=name,position=index) }) }
 }
-private suspend fun startProgram(dao: TrainingDao, program: ProgramWithExercises) { val workoutId = dao.insertWorkout(WorkoutEntity()); program.exercises.sortedBy { it.position }.forEach { dao.insertExercise(ExerciseEntity(workoutId=workoutId,name=it.name,targetSets=it.targetSets,targetReps=it.targetReps)) } }
+private suspend fun startProgram(dao: TrainingDao, program: ProgramWithExercises):Long { val workoutId = dao.insertWorkout(WorkoutEntity()); program.exercises.sortedBy { it.position }.forEach { dao.insertExercise(ExerciseEntity(workoutId=workoutId,name=it.name,targetSets=it.targetSets,targetReps=it.targetReps)) };return workoutId }
 
 data class CatalogExercise(val name: String, val muscle: String)
 val exerciseCatalog = listOf(
@@ -88,6 +88,8 @@ val exerciseCatalog = listOf(
     val context = LocalContext.current; val dao = remember { TrainingDatabase.getInstance(context).trainingDao() }; val scope = rememberCoroutineScope()
     val completed by dao.observeCompletedWorkouts().collectAsState(initial=emptyList())
     val active by dao.observeActiveWorkout().collectAsState(initial = null); val id = active?.id ?: -1
+    val prefs=remember{context.getSharedPreferences("stem_settings",0)}
+    LaunchedEffect(active?.id){val workout=active?:return@LaunchedEffect;if(prefs.getBoolean("starting_workout",false)){prefs.edit().putLong("active_workout_id",workout.id).remove("starting_workout").apply();return@LaunchedEffect};delay(300);val explicitId=prefs.getLong("active_workout_id",-1);if(explicitId!=workout.id){if(dao.setCountForWorkout(workout.id)==0)dao.deleteWorkout(workout.id)else dao.finishWorkout(workout.id);prefs.edit().remove("active_workout_id").apply()}}
     val exercises by remember(id) { dao.observeExercises(id) }.collectAsState(initial = emptyList()); val sets by remember(id) { dao.observeSets(id) }.collectAsState(initial = emptyList())
     val trainingListState=rememberLazyListState()
     val activity=remember(context){context.componentActivity()}
@@ -98,7 +100,7 @@ val exerciseCatalog = listOf(
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = 16.dp),state=trainingListState, verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item { Spacer(Modifier.height(18.dp)); Row(verticalAlignment = Alignment.CenterVertically) { Image(painterResource(R.drawable.stem_training_logo),"Логотип S.T.E.M. Training",Modifier.size(62.dp),contentScale=ContentScale.Fit);Spacer(Modifier.width(12.dp));Column(Modifier.weight(1f)) { Text("S.T.E.M. Training", color = MaterialTheme.colorScheme.secondary, style = MaterialTheme.typography.titleMedium); Text("SIC PARVIS MAGNA",style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant);Text(if (active == null) "Тренировка" else "В процессе", style = MaterialTheme.typography.headlineSmall) }; Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.primaryContainer) { Icon(Icons.Rounded.Bolt, null, Modifier.padding(12.dp)) } } }
         if(active==null && completed.isNotEmpty())item{WorkoutCoach(completed.first().id)}
-        if (active == null) item { Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) { Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) { Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.primaryContainer) { Icon(Icons.Rounded.FitnessCenter, null, Modifier.padding(14.dp).size(28.dp)) }; Text("Готовы стать сильнее?", style = MaterialTheme.typography.titleLarge); Text("Начните свободную тренировку или следуйте сохранённой программе.", color = MaterialTheme.colorScheme.onSurfaceVariant); Button({ scope.launch { dao.insertWorkout(WorkoutEntity()) } }, Modifier.fillMaxWidth().height(52.dp)) { Icon(Icons.Rounded.PlayArrow, null); Spacer(Modifier.width(8.dp)); Text("Начать тренировку") }; OutlinedButton(onPrograms, Modifier.fillMaxWidth().height(52.dp)) { Icon(Icons.Rounded.ViewList, null); Spacer(Modifier.width(8.dp)); Text("Выбрать программу") } } } }
+        if (active == null) item { Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) { Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) { Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.primaryContainer) { Icon(Icons.Rounded.FitnessCenter, null, Modifier.padding(14.dp).size(28.dp)) }; Text("Готовы стать сильнее?", style = MaterialTheme.typography.titleLarge); Text("Начните свободную тренировку или следуйте сохранённой программе.", color = MaterialTheme.colorScheme.onSurfaceVariant); Button({ scope.launch { prefs.edit().putBoolean("starting_workout",true).apply();val newId=dao.insertWorkout(WorkoutEntity());prefs.edit().putLong("active_workout_id",newId).remove("starting_workout").apply() } }, Modifier.fillMaxWidth().height(52.dp)) { Icon(Icons.Rounded.PlayArrow, null); Spacer(Modifier.width(8.dp)); Text("Начать тренировку") }; OutlinedButton(onPrograms, Modifier.fillMaxWidth().height(52.dp)) { Icon(Icons.Rounded.ViewList, null); Spacer(Modifier.width(8.dp)); Text("Выбрать программу") } } } }
         else {
             item { ActiveTimer(active!!.startedAt, exercises.size, sets.size, sets.sumOf { it.weight * it.reps }) }
             item { TextButton({notesEditor=true}) { Icon(Icons.Rounded.Notes,null); Text(if(active!!.notes.isBlank())" Добавить заметку" else " ${active!!.notes}") } }
@@ -152,7 +154,7 @@ val exerciseCatalog = listOf(
     editSet?.let { set -> SetDialog(set,{editSet=null},{weight,reps,rir,warmup->scope.launch{dao.updateSet(set.copy(weight=weight,reps=reps,rir=rir,isWarmup=warmup))};editSet=null},{scope.launch{dao.deleteSet(set.id)};editSet=null}) }
     editExercise?.let { exercise -> ExerciseDialog(exercise, { editExercise = null }, { name -> scope.launch { dao.updateExercise(exercise.copy(name = name)) }; editExercise = null }, { scope.launch { dao.deleteExercise(exercise.id) }; editExercise = null }, { editExercise = null; replaceExercise = exercise }) }
     replaceExercise?.let { exercise -> ExerciseCatalogDialog(exercises.filter { it.id != exercise.id }.map { it.name }.toSet(), { replaceExercise = null }) { name -> scope.launch { dao.updateExercise(exercise.copy(name = name)) }; replaceExercise = null } }
-    if (finish && active != null) AlertDialog(onDismissRequest = { finish = false }, title = { Text("Завершить тренировку?") }, text = { Text("${exercises.size} упражнений · ${sets.size} подходов · ${number(sets.sumOf { it.weight * it.reps })} кг") }, confirmButton = { TextButton({ scope.launch { dao.finishWorkout(active!!.id);RestAlarm.cancel(context) }; finish = false }) { Text("Завершить") } }, dismissButton = { TextButton({ finish = false }) { Text("Отмена") } })
+    if (finish && active != null) AlertDialog(onDismissRequest = { finish = false }, title = { Text("Завершить тренировку?") }, text = { Text("${exercises.size} упражнений · ${sets.size} подходов · ${number(sets.sumOf { it.weight * it.reps })} кг") }, confirmButton = { TextButton({ scope.launch { dao.finishWorkout(active!!.id);prefs.edit().remove("active_workout_id").apply();RestAlarm.cancel(context) }; finish = false }) { Text("Завершить") } }, dismissButton = { TextButton({ finish = false }) { Text("Отмена") } })
     if(notesEditor&&active!=null)WorkoutNotesDialog(active!!,{notesEditor=false}){scope.launch{dao.updateWorkout(active!!.copy(notes=it))};notesEditor=false}
 }
 
