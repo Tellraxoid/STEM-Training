@@ -25,6 +25,10 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.STEMTraining">
+        <provider
+            android:name=".TrainingSummaryProvider"
+            android:authorities="com.stem.training.summary;com.stem.stemtraining.summary"
+            android:exported="true" />
         <receiver android:name=".RestAlarmReceiver" android:exported="false" />
         <activity android:name=".HealthPrivacyActivity" android:exported="true">
             <intent-filter><action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" /></intent-filter>
