@@ -11,6 +11,7 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.ChevronLeft
 import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -40,6 +41,7 @@ import java.util.*
     var addingExerciseTo by remember { mutableStateOf<WorkoutEntity?>(null) }
     var exerciseGuideName by remember { mutableStateOf<String?>(null) }
     var programPickerFor by remember { mutableStateOf<WorkoutEntity?>(null) }
+    var copyPicker by remember { mutableStateOf(false) }
 
     val workoutsByDay = remember(workouts) { workouts.groupBy { dayStart(it.startedAt) } }
     val selectedWorkouts = workoutsByDay[selectedDay].orEmpty()
@@ -76,7 +78,7 @@ import java.util.*
         }
 
         Spacer(Modifier.height(10.dp))
-        SelectedDayPanel(selectedDay, selectedWorkouts, summaries, onOpen = { details = it }) {
+        SelectedDayPanel(selectedDay, selectedWorkouts, summaries, onOpen = { details = it }, copy = { copyPicker = true }) {
             scope.launch {
                 val (start, end) = historicalWorkoutTimes(selectedDay)
                 val id = dao.insertWorkout(WorkoutEntity(startedAt = start, endedAt = end))
@@ -116,6 +118,7 @@ import java.util.*
     addingExerciseTo?.let { workout -> val existing by dao.observeExercises(workout.id).collectAsState(initial = emptyList()); ExerciseCatalogDialog(existing.map { it.name }.toSet(), { addingExerciseTo = null }) { name -> scope.launch { dao.insertExercise(ExerciseEntity(workoutId = workout.id, name = name)) }; addingExerciseTo = null } }
     exerciseGuideName?.let { name -> ExerciseDetailsDialog(name) { exerciseGuideName = null } }
     programPickerFor?.let { workout -> ProgramPickerDialog(dao, { programPickerFor = null }) { program -> scope.launch { program.exercises.sortedBy { it.position }.forEach { item -> dao.insertExercise(ExerciseEntity(workoutId = workout.id, name = item.name, targetSets = item.targetSets, targetReps = item.targetReps)) } }; programPickerFor = null; details = workout } }
+    if(copyPicker)CopyWorkoutDialog(workouts,{copyPicker=false}){source->scope.launch{val(start,end)=historicalWorkoutTimes(selectedDay);val id=dao.copyWorkout(source.id,start,end);details=WorkoutEntity(id=id,startedAt=start,endedAt=end)};copyPicker=false}
 }
 
 @Composable private fun ColumnScope.CalendarGrid(days: List<Long?>, selectedDay: Long, workouts: Map<Long, List<WorkoutEntity>>, select: (Long) -> Unit) {
@@ -150,7 +153,7 @@ import java.util.*
     }
 }
 
-@Composable private fun SelectedDayPanel(day: Long, workouts: List<WorkoutEntity>, summaries: List<WorkoutSummaryRow>, onOpen: (WorkoutEntity) -> Unit, add: () -> Unit) {
+@Composable private fun SelectedDayPanel(day: Long, workouts: List<WorkoutEntity>, summaries: List<WorkoutSummaryRow>, onOpen: (WorkoutEntity) -> Unit, copy:()->Unit, add: () -> Unit) {
     Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -158,7 +161,9 @@ import java.util.*
                     Text(SimpleDateFormat("EEEE, d MMMM", Locale.getDefault()).format(Date(day)).replaceFirstChar { it.uppercase() }, fontWeight = FontWeight.Bold)
                     Text(if (workouts.isEmpty()) "День отдыха" else "${workouts.size} трениров${if (workouts.size == 1) "ка" else "ки"}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                FilledTonalIconButton(add) { Icon(Icons.Rounded.Add, "Добавить тренировку") }
+                FilledTonalIconButton(copy) { Icon(Icons.Rounded.ContentCopy, "Добавить тренировку из другого дня") }
+                Spacer(Modifier.width(6.dp))
+                FilledTonalIconButton(add) { Icon(Icons.Rounded.Add, "Добавить пустую тренировку") }
             }
             workouts.forEach { workout ->
                 val summary = summaries.firstOrNull { it.workoutId == workout.id }
@@ -171,6 +176,13 @@ import java.util.*
             }
         }
     }
+}
+
+@Composable private fun CopyWorkoutDialog(workouts:List<WorkoutEntity>,dismiss:()->Unit,select:(WorkoutEntity)->Unit){
+    AlertDialog(onDismissRequest=dismiss,title={Text("Тренировка из другого дня")},text={LazyColumn(Modifier.heightIn(max=420.dp)){
+        if(workouts.isEmpty())item{Text("В истории пока нет тренировок для копирования.")}
+        items(workouts,key={it.id}){workout->Card(Modifier.fillMaxWidth().padding(vertical=4.dp).clickable{select(workout)}){Column(Modifier.padding(14.dp)){Text(SimpleDateFormat("EEEE, d MMMM",Locale.getDefault()).format(Date(workout.startedAt)).replaceFirstChar{it.uppercase()},fontWeight=FontWeight.Bold);Text(SimpleDateFormat("HH:mm",Locale.getDefault()).format(Date(workout.startedAt)),style=MaterialTheme.typography.bodySmall)}}}
+    }},confirmButton={},dismissButton={TextButton(dismiss){Text("Отмена")}})
 }
 
 private fun monthStart(time: Long): Long = Calendar.getInstance().apply { timeInMillis = time; set(Calendar.DAY_OF_MONTH, 1); set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0) }.timeInMillis

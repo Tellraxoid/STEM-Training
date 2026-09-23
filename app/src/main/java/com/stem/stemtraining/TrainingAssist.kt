@@ -161,11 +161,15 @@ fun coachAdvice(sets:List<WorkoutSetEntity>,targetReps:Int?):String {
     val context=LocalContext.current;val dao=remember{TrainingDatabase.getInstance(context).trainingDao()}
     val sets by remember(workoutId){dao.observeSets(workoutId)}.collectAsState(initial=emptyList())
     val exercises by remember(workoutId){dao.observeExercises(workoutId)}.collectAsState(initial=emptyList())
+    val scope=rememberCoroutineScope();var aiAdvice by remember(workoutId){mutableStateOf<String?>(null)};var aiError by remember(workoutId){mutableStateOf<String?>(null)};var loading by remember(workoutId){mutableStateOf(false)}
+    fun loadAdvice(){if(loading)return;loading=true;aiError=null;scope.launch{requestAiWorkoutAdvice(context,exercises,sets).onSuccess{aiAdvice=it}.onFailure{aiError=it.message};loading=false}}
+    LaunchedEffect(workoutId,exercises.size,sets.size){if(exercises.isNotEmpty()&&sets.isNotEmpty()&&context.getSharedPreferences("stem_settings",0).getString("ai_api_url","").orEmpty().isNotBlank())loadAdvice()}
     Card(Modifier.fillMaxWidth()){Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
-        Text("Тренер · итог тренировки",style=MaterialTheme.typography.titleMedium)
+        Text("ИИ-тренер · итог тренировки",style=MaterialTheme.typography.titleMedium)
         Text("${sets.count{!it.isWarmup}} рабочих подходов · ${number(sets.filterNot{it.isWarmup}.sumOf{it.weight*it.reps})} кг объёма")
         exercises.forEach{exercise->Text(exercise.name,style=MaterialTheme.typography.titleSmall);Text(coachAdvice(sets.filter{it.exerciseId==exercise.id},exercise.targetReps),style=MaterialTheme.typography.bodySmall)}
+        when{loading->Row(verticalAlignment=Alignment.CenterVertically){CircularProgressIndicator(Modifier.size(20.dp),strokeWidth=2.dp);Text("  Получаю персональные советы…")};aiAdvice!=null->Surface(shape=MaterialTheme.shapes.medium,color=MaterialTheme.colorScheme.primaryContainer){Text(aiAdvice!!,Modifier.padding(14.dp))};else->{aiError?.let{Text(it,color=MaterialTheme.colorScheme.error,style=MaterialTheme.typography.bodySmall)};OutlinedButton({loadAdvice()},Modifier.fillMaxWidth()){Text("Получить советы ИИ")}}}
         HealthConnectPanel(compact=true)
-        Text("Локальный анализ по правилам, не внешний ИИ. Health Connect показывает текущий контекст, а не данные на дату тренировки. Программа не изменяется автоматически.",style=MaterialTheme.typography.labelSmall)
+        Text("Базовые подсказки рассчитываются на устройстве. При настроенном API сводка подходов отправляется указанному вами сервису. Программа не изменяется автоматически.",style=MaterialTheme.typography.labelSmall)
     }}
 }
