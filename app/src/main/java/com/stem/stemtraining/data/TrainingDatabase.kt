@@ -50,6 +50,7 @@ data class ProgramWithExercises(@Embedded val program: ProgramEntity, @Relation(
     @Query("UPDATE exercises SET supersetNext = 0 WHERE workoutId = (SELECT workoutId FROM exercises WHERE id = :id)") suspend fun clearWorkoutSupersets(id:Long)
     @Transaction suspend fun deleteExercise(id:Long){clearWorkoutSupersets(id);deleteExerciseRow(id)}
     @Query("DELETE FROM workouts WHERE id = :id") suspend fun deleteWorkout(id: Long)
+    @Query("SELECT COUNT(*) FROM workout_sets INNER JOIN exercises ON exercises.id=workout_sets.exerciseId WHERE exercises.workoutId=:workoutId") suspend fun setCountForWorkout(workoutId:Long):Int
     @Query("DELETE FROM program_exercises WHERE programId = :programId") suspend fun clearProgramExercises(programId: Long)
     @Query("DELETE FROM programs WHERE id = :id") suspend fun deleteProgram(id: Long)
     @Query("SELECT COUNT(*) FROM programs") suspend fun programCount(): Int
