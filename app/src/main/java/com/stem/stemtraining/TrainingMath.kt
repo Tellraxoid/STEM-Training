@@ -18,16 +18,17 @@ fun suggestedNextWeight(sets:List<PreviousWorkoutSetRow>,step:Double):LoadSugges
     val safeStep=step.coerceAtLeast(0.5)
     val base=valid.groupingBy{it.weight}.eachCount().entries.sortedWith(compareByDescending<Map.Entry<Double,Int>>{it.value}.thenByDescending{it.key}).first().key
     val efforts=valid.mapNotNull{it.effort}
-    val multiplier=when{efforts.size<valid.size->0;efforts.any{it=="Тяжело"}->0;efforts.all{it=="Легко"}->2;else->1}
+    val failed=efforts.any{it=="До отказа"}
+    val multiplier=when{efforts.size<valid.size->0;failed->0;efforts.any{it=="Тяжело"}->0;efforts.all{it=="Легко"}->2;else->1}
     val change=safeStep*multiplier
-    val reason=when{efforts.size<valid.size->"Не все подходы оценены — повторите основной вес и отметьте усилие.";multiplier==0->"Было тяжело — вес пока не повышаем.";multiplier==2->"Все подходы были лёгкими — можно прибавить два шага.";else->"Нагрузка была нормальной — прибавьте один шаг."}
+    val reason=when{efforts.size<valid.size->"Не все подходы оценены — повторите основной вес и отметьте усилие.";failed->"Был подход до отказа — вес пока не повышаем.";multiplier==0->"Было тяжело — вес пока не повышаем.";multiplier==2->"Все подходы были лёгкими — можно прибавить два шага.";else->"Нагрузка была нормальной — прибавьте один шаг."}
     return LoadSuggestion(base+change,change,reason)
 }
 
 data class WorkoutRecommendation(val weight:Double?,val sets:Int,val reps:IntRange,val recommendedReps:Int,val reason:String,val relativeLoadPercent:Int?=null)
 fun exerciseRepRange(name:String,goal:TrainingGoal):IntRange{
     val normalized=name.lowercase()
-    val calves=normalized.contains("носок")||normalized.contains("икр")
+    val calves=normalized.contains("носк")||normalized.contains("икр")
     val core=normalized.contains("скручив")||normalized.contains("подъём ног")||normalized.contains("пресс")
     val isolation=listOf("разведение","сведение","подъём рук","сгибание ног","разгибание ног","сгибание рук","разгибание рук","шраги").any(normalized::contains)
     return when{
