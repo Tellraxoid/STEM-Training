@@ -4,13 +4,14 @@ import android.content.Context
 import androidx.room.*
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.stem.stemtraining.DEFAULT_TOTAL_SETS
 import kotlinx.coroutines.flow.Flow
 
 @Entity(tableName = "workouts") data class WorkoutEntity(@PrimaryKey(autoGenerate = true) val id: Long = 0, val startedAt: Long = System.currentTimeMillis(), val endedAt: Long? = null, val notes: String = "")
 @Entity(tableName = "exercises", indices = [Index("workoutId")], foreignKeys = [ForeignKey(entity = WorkoutEntity::class, parentColumns = ["id"], childColumns = ["workoutId"], onDelete = ForeignKey.CASCADE)]) data class ExerciseEntity(@PrimaryKey(autoGenerate = true) val id: Long = 0, val workoutId: Long, val name: String, val createdAt: Long = System.currentTimeMillis(), val targetSets: Int? = null, val targetReps: Int? = null, val supersetNext: Boolean = false)
 @Entity(tableName = "workout_sets", indices = [Index("exerciseId")], foreignKeys = [ForeignKey(entity = ExerciseEntity::class, parentColumns = ["id"], childColumns = ["exerciseId"], onDelete = ForeignKey.CASCADE)]) data class WorkoutSetEntity(@PrimaryKey(autoGenerate = true) val id: Long = 0, val exerciseId: Long, val weight: Double, val reps: Int, val createdAt: Long = System.currentTimeMillis(), val rir: Int? = null, val isWarmup: Boolean = false, val effort: String? = null)
 @Entity(tableName = "programs") data class ProgramEntity(@PrimaryKey(autoGenerate = true) val id: Long = 0, val name: String, val createdAt: Long = System.currentTimeMillis())
-@Entity(tableName = "program_exercises", indices = [Index("programId")], foreignKeys = [ForeignKey(entity = ProgramEntity::class, parentColumns = ["id"], childColumns = ["programId"], onDelete = ForeignKey.CASCADE)]) data class ProgramExerciseEntity(@PrimaryKey(autoGenerate = true) val id: Long = 0, val programId: Long, val name: String, val position: Int, val targetSets: Int = 3, val targetReps: Int = 10)
+@Entity(tableName = "program_exercises", indices = [Index("programId")], foreignKeys = [ForeignKey(entity = ProgramEntity::class, parentColumns = ["id"], childColumns = ["programId"], onDelete = ForeignKey.CASCADE)]) data class ProgramExerciseEntity(@PrimaryKey(autoGenerate = true) val id: Long = 0, val programId: Long, val name: String, val position: Int, val targetSets: Int = DEFAULT_TOTAL_SETS, val targetReps: Int = 10)
 
 data class WorkoutSummaryRow(val workoutId: Long, val exerciseCount: Int, val setCount: Int, val volume: Double)
 data class ExerciseProgressRow(val name: String, val sessions: Int, val sets: Int, val bestWeight: Double, val bestEstimated1Rm: Double, val totalVolume: Double)
@@ -74,7 +75,7 @@ data class ProgramWithExercises(@Embedded val program: ProgramEntity, @Relation(
     @Transaction suspend fun saveProgram(program: ProgramEntity, items: List<ProgramExerciseEntity>): Long { val id = if (program.id == 0L) insertProgram(program) else { updateProgram(program); clearProgramExercises(program.id); program.id }; insertProgramExercises(items.mapIndexed { index, item -> item.copy(id = 0, programId = id, position = index) }); return id }
 }
 
-@Database(entities = [WorkoutEntity::class, ExerciseEntity::class, WorkoutSetEntity::class, ProgramEntity::class, ProgramExerciseEntity::class], version = 9, exportSchema = false)
+@Database(entities = [WorkoutEntity::class, ExerciseEntity::class, WorkoutSetEntity::class, ProgramEntity::class, ProgramExerciseEntity::class], version = 10, exportSchema = false)
 abstract class TrainingDatabase : RoomDatabase() {
     abstract fun trainingDao(): TrainingDao
     companion object {
@@ -106,6 +107,10 @@ abstract class TrainingDatabase : RoomDatabase() {
             db.execSQL("UPDATE exercises SET name = 'Скручивания в блоке на пресс' WHERE name = 'Скручивания в блоке'")
             db.execSQL("UPDATE program_exercises SET name = 'Скручивания в блоке на пресс' WHERE name = 'Скручивания в блоке'")
         } }
-        fun getInstance(context: Context): TrainingDatabase = instance ?: synchronized(this) { instance ?: Room.databaseBuilder(context.applicationContext, TrainingDatabase::class.java, "stem_training.db").addMigrations(migration1To2, migration2To3, migration3To4, migration4To5, migration5To6, migration6To7, migration7To8, migration8To9).build().also { instance = it } }
+        private val migration9To10 = object : Migration(9, 10) { override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("UPDATE program_exercises SET targetSets = 4 WHERE targetSets = 3")
+            db.execSQL("UPDATE exercises SET targetSets = 4 WHERE targetSets = 3")
+        } }
+        fun getInstance(context: Context): TrainingDatabase = instance ?: synchronized(this) { instance ?: Room.databaseBuilder(context.applicationContext, TrainingDatabase::class.java, "stem_training.db").addMigrations(migration1To2, migration2To3, migration3To4, migration4To5, migration5To6, migration6To7, migration7To8, migration8To9, migration9To10).build().also { instance = it } }
     }
 }
