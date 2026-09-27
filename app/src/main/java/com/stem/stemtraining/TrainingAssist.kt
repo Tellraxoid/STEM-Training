@@ -16,6 +16,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.stem.stemtraining.data.*
 import kotlinx.coroutines.delay
@@ -158,17 +159,18 @@ fun coachAdvice(sets:List<WorkoutSetEntity>,targetReps:Int?):String {
 }
 
 @Composable fun WorkoutCoach(workoutId:Long){
-    val context=LocalContext.current;val dao=remember{TrainingDatabase.getInstance(context).trainingDao()}
+    val context=LocalContext.current;val dao=remember{TrainingDatabase.getInstance(context).trainingDao()};val prefs=remember{context.getSharedPreferences("stem_settings",0)}
     val sets by remember(workoutId){dao.observeSets(workoutId)}.collectAsState(initial=emptyList())
     val exercises by remember(workoutId){dao.observeExercises(workoutId)}.collectAsState(initial=emptyList())
-    val scope=rememberCoroutineScope();var aiAdvice by remember(workoutId){mutableStateOf<String?>(null)};var aiError by remember(workoutId){mutableStateOf<String?>(null)};var loading by remember(workoutId){mutableStateOf(false)}
-    fun loadAdvice(){if(loading)return;loading=true;aiError=null;scope.launch{requestAiWorkoutAdvice(exercises,sets).onSuccess{aiAdvice=it}.onFailure{aiError=it.message};loading=false}}
-    LaunchedEffect(workoutId,exercises.size,sets.size){if(exercises.isNotEmpty()&&sets.isNotEmpty())loadAdvice()}
+    val cacheKey="ai_workout_advice_v2_$workoutId"
+    val scope=rememberCoroutineScope();var aiAdvice by remember(workoutId){mutableStateOf(prefs.getString(cacheKey,null))};var aiError by remember(workoutId){mutableStateOf<String?>(null)};var loading by remember(workoutId){mutableStateOf(false)}
+    fun loadAdvice(force:Boolean=false){if(loading||(!force&&aiAdvice!=null))return;loading=true;aiError=null;scope.launch{requestAiWorkoutAdvice(exercises,sets).onSuccess{advice->aiAdvice=advice;prefs.edit().putString(cacheKey,advice).apply()}.onFailure{aiError=it.message};loading=false}}
+    LaunchedEffect(workoutId,exercises.size,sets.size){if(aiAdvice==null&&exercises.isNotEmpty()&&sets.isNotEmpty())loadAdvice()}
     Card(Modifier.fillMaxWidth()){Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
         Text("ИИ-тренер · итог тренировки",style=MaterialTheme.typography.titleMedium)
         Text("${sets.count{!it.isWarmup}} рабочих подходов · ${number(sets.filterNot{it.isWarmup}.sumOf{it.weight*it.reps})} кг объёма")
         exercises.forEach{exercise->Text(exercise.name,style=MaterialTheme.typography.titleSmall);Text(coachAdvice(sets.filter{it.exerciseId==exercise.id},exercise.targetReps),style=MaterialTheme.typography.bodySmall)}
-        when{loading->Row(verticalAlignment=Alignment.CenterVertically){CircularProgressIndicator(Modifier.size(20.dp),strokeWidth=2.dp);Text("  Получаю персональные советы…")};aiAdvice!=null->Surface(shape=MaterialTheme.shapes.medium,color=MaterialTheme.colorScheme.primaryContainer){Text(aiAdvice!!,Modifier.padding(14.dp))};else->{aiError?.let{Text(it,color=MaterialTheme.colorScheme.error,style=MaterialTheme.typography.bodySmall)};OutlinedButton({loadAdvice()},Modifier.fillMaxWidth()){Text("Получить советы ИИ")}}}
+        when{loading->Row(verticalAlignment=Alignment.CenterVertically){CircularProgressIndicator(Modifier.size(20.dp),strokeWidth=2.dp);Text("  Получаю персональные советы…")};aiAdvice!=null->{Surface(Modifier.fillMaxWidth(),shape=MaterialTheme.shapes.medium,color=MaterialTheme.colorScheme.primaryContainer){Text(aiAdvice!!,Modifier.fillMaxWidth().padding(14.dp),softWrap=true,maxLines=Int.MAX_VALUE,overflow=TextOverflow.Visible)};TextButton({loadAdvice(force=true)},Modifier.align(Alignment.End)){Text("Обновить совет")}};else->{aiError?.let{Text(it,color=MaterialTheme.colorScheme.error,style=MaterialTheme.typography.bodySmall)};OutlinedButton({loadAdvice()},Modifier.fillMaxWidth()){Text("Получить советы ИИ")}}}
         HealthConnectPanel(compact=true)
         Text("Базовые подсказки рассчитываются на устройстве. Для персональных советов сводка подходов отправляется в STEM Companion. Программа не изменяется автоматически.",style=MaterialTheme.typography.labelSmall)
     }}
