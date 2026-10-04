@@ -243,15 +243,16 @@ val exerciseCatalog = listOf(
     var favorites by remember{mutableStateOf(prefs.getStringSet("favorite_exercises",emptySet())?:emptySet())}
     var details by remember{mutableStateOf<String?>(null)}
     val custom=remember{prefs.getStringSet("custom_exercises",emptySet())?.map{CatalogExercise(it.substringBefore('|'),it.substringAfter('|',"Другое"))}?:emptyList()}
-    val filtered=(exerciseCatalog+custom).filter{(it.name.contains(query,true)||it.muscle.contains(query,true))&&it.name !in existing}.sortedByDescending{it.name in favorites}
+    val filtered=(exerciseCatalog+custom).filter{it.name.contains(query,true)||it.muscle.contains(query,true)}.sortedWith(compareBy<CatalogExercise>{it.name in existing}.thenByDescending{it.name in favorites}.thenBy{it.name})
     Dialog(onDismissRequest=dismiss){Card{Column(Modifier.padding(18.dp)){
         Text("Добавить упражнение",style=MaterialTheme.typography.titleLarge)
         OutlinedTextField(query,{query=it},label={Text("Поиск по названию или мышце")},modifier=Modifier.fillMaxWidth())
         LazyColumn(Modifier.heightIn(max=420.dp)){items(filtered){exercise->
+            val alreadyAdded=exercise.name in existing
             Row(Modifier.fillMaxWidth().padding(vertical=8.dp),verticalAlignment=Alignment.CenterVertically){
                 Image(painterResource(exerciseIcon(exercise.name)),"Описание ${exercise.name}",Modifier.size(58.dp).clickable{details=exercise.name},contentScale=ContentScale.Crop)
                 IconButton({favorites=if(exercise.name in favorites)favorites-exercise.name else favorites+exercise.name;prefs.edit().putStringSet("favorite_exercises",favorites).apply()}){Icon(if(exercise.name in favorites)Icons.Rounded.Star else Icons.Rounded.StarBorder,null)}
-                Column(Modifier.weight(1f).clickable{select(exercise.name)}.padding(vertical=8.dp)){Text(exercise.name);Text(exercise.muscle,style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant)}
+                Column(Modifier.weight(1f).clickable(enabled=!alreadyAdded){select(exercise.name)}.padding(vertical=8.dp)){Text(exercise.name);Text(if(alreadyAdded)"${exercise.muscle} · уже добавлено" else exercise.muscle,style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant)}
             }
         }}
         TextButton(dismiss,Modifier.align(Alignment.End)){Text("Закрыть")}

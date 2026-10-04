@@ -4,6 +4,7 @@ import androidx.annotation.DrawableRes
 
 @DrawableRes fun exerciseIcon(name:String):Int=when{
     name.contains("подъём на носки сидя",true)->R.drawable.exercise_seated_calf_machine
+    name.contains("подъём на носки стоя",true)&&name.contains("гантел",true)->R.drawable.exercise_standing_dumbbell_calf_raise
     name.contains("разгибание рук в наклоне",true)&&name.contains("гантел",true)->R.drawable.exercise_dumbbell_triceps_kickback
     name.contains("наклонной скамье",true)&&name.contains("Смита",true)->R.drawable.exercise_incline_smith_press
     name.contains("жим от груди сидя",true)&&name.contains("тренаж",true)->R.drawable.exercise_seated_chest_press_machine
