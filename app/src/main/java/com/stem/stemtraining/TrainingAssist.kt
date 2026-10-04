@@ -8,7 +8,9 @@ import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.material.icons.rounded.Timer
 import androidx.compose.runtime.*
@@ -162,16 +164,25 @@ fun coachAdvice(sets:List<WorkoutSetEntity>,targetReps:Int?):String {
     val context=LocalContext.current;val dao=remember{TrainingDatabase.getInstance(context).trainingDao()};val prefs=remember{context.getSharedPreferences("stem_settings",0)}
     val sets by remember(workoutId){dao.observeSets(workoutId)}.collectAsState(initial=emptyList())
     val exercises by remember(workoutId){dao.observeExercises(workoutId)}.collectAsState(initial=emptyList())
-    val cacheKey="ai_workout_advice_v2_$workoutId"
+    val cacheKey="ai_workout_advice_v3_$workoutId"
     val scope=rememberCoroutineScope();var aiAdvice by remember(workoutId){mutableStateOf(prefs.getString(cacheKey,null))};var aiError by remember(workoutId){mutableStateOf<String?>(null)};var loading by remember(workoutId){mutableStateOf(false)}
-    fun loadAdvice(force:Boolean=false){if(loading||(!force&&aiAdvice!=null))return;loading=true;aiError=null;scope.launch{requestAiWorkoutAdvice(exercises,sets).onSuccess{advice->aiAdvice=advice;prefs.edit().putString(cacheKey,advice).apply()}.onFailure{aiError=it.message};loading=false}}
+    fun loadAdvice(force:Boolean=false){if(loading||(!force&&aiAdvice!=null))return;loading=true;aiError=null;scope.launch{val history=dao.recentWorkingSetsForAi();requestAiWorkoutAdvice(context,exercises,sets,history).onSuccess{advice->aiAdvice=advice;prefs.edit().putString(cacheKey,advice).apply()}.onFailure{aiError=it.message};loading=false}}
     LaunchedEffect(workoutId,exercises.size,sets.size){if(aiAdvice==null&&exercises.isNotEmpty()&&sets.isNotEmpty())loadAdvice()}
     Card(Modifier.fillMaxWidth()){Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
         Text("ИИ-тренер · итог тренировки",style=MaterialTheme.typography.titleMedium)
         Text("${sets.count{!it.isWarmup}} рабочих подходов · ${number(sets.filterNot{it.isWarmup}.sumOf{it.weight*it.reps})} кг объёма")
         exercises.forEach{exercise->Text(exercise.name,style=MaterialTheme.typography.titleSmall);Text(coachAdvice(sets.filter{it.exerciseId==exercise.id},exercise.targetReps),style=MaterialTheme.typography.bodySmall)}
-        when{loading->Row(verticalAlignment=Alignment.CenterVertically){CircularProgressIndicator(Modifier.size(20.dp),strokeWidth=2.dp);Text("  Получаю персональные советы…")};aiAdvice!=null->{Surface(Modifier.fillMaxWidth(),shape=MaterialTheme.shapes.medium,color=MaterialTheme.colorScheme.primaryContainer){Text(aiAdvice!!,Modifier.fillMaxWidth().padding(14.dp),softWrap=true,maxLines=Int.MAX_VALUE,overflow=TextOverflow.Visible)};TextButton({loadAdvice(force=true)},Modifier.align(Alignment.End)){Text("Обновить совет")}};else->{aiError?.let{Text(it,color=MaterialTheme.colorScheme.error,style=MaterialTheme.typography.bodySmall)};OutlinedButton({loadAdvice()},Modifier.fillMaxWidth()){Text("Получить советы ИИ")}}}
+        when{loading->Row(verticalAlignment=Alignment.CenterVertically){CircularProgressIndicator(Modifier.size(20.dp),strokeWidth=2.dp);Text("  Получаю персональные советы…")};aiAdvice!=null->{
+            val adviceScrollState=rememberScrollState()
+            Surface(Modifier.fillMaxWidth(),shape=MaterialTheme.shapes.medium,color=MaterialTheme.colorScheme.primaryContainer){
+                Column(Modifier.fillMaxWidth().heightIn(max=420.dp).verticalScroll(adviceScrollState).padding(14.dp)){
+                    Text(aiAdvice!!,Modifier.fillMaxWidth(),softWrap=true,maxLines=Int.MAX_VALUE,overflow=TextOverflow.Visible)
+                }
+            }
+            Text("Прокрутите совет внутри зелёного блока",style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+            TextButton({loadAdvice(force=true)},Modifier.align(Alignment.End)){Text("Обновить совет")}
+        };else->{aiError?.let{Text(it,color=MaterialTheme.colorScheme.error,style=MaterialTheme.typography.bodySmall)};OutlinedButton({loadAdvice()},Modifier.fillMaxWidth()){Text("Получить советы ИИ")}}}
         HealthConnectPanel(compact=true)
-        Text("Базовые подсказки рассчитываются на устройстве. Для персональных советов сводка подходов отправляется в STEM Companion. Программа не изменяется автоматически.",style=MaterialTheme.typography.labelSmall)
+        Text("Агент сравнивает рабочие подходы с историей. Если в настройках разрешён персональный контекст, он также учитывает цель, питание, показатели тела и восстановление. Программа не изменяется автоматически.",style=MaterialTheme.typography.labelSmall)
     }}
 }

@@ -113,8 +113,8 @@ import java.util.*
             }
         }, confirmButton = { TextButton({ details = null }) { Text("Готово") } })
     }
-    editingSet?.let { set -> SetDialog(set, { editingSet = null }, { weight, reps, rir, warmup -> scope.launch { dao.updateSet(set.copy(weight = weight, reps = reps, rir = rir, isWarmup = warmup)) }; editingSet = null }, { scope.launch { dao.deleteSet(set.id) }; editingSet = null }) }
-    addingSetFor?.let { exercise -> SetDialog(null, { addingSetFor = null }, { weight, reps, rir, warmup -> scope.launch { dao.insertSet(WorkoutSetEntity(exerciseId = exercise.id, weight = weight, reps = reps, rir = rir, isWarmup = warmup)) }; addingSetFor = null }, isNew = true) }
+    editingSet?.let { set -> SetDialog(set, { editingSet = null }, { weight, reps, rir, warmup, effort -> scope.launch { dao.updateSet(set.copy(weight = weight, reps = reps, rir = rir, isWarmup = warmup, effort = if(warmup)null else effort)) }; editingSet = null }, { scope.launch { dao.deleteSet(set.id) }; editingSet = null }) }
+    addingSetFor?.let { exercise -> SetDialog(null, { addingSetFor = null }, { weight, reps, rir, warmup, effort -> scope.launch { dao.insertSet(WorkoutSetEntity(exerciseId = exercise.id, weight = weight, reps = reps, rir = rir, isWarmup = warmup, effort = if(warmup)null else effort)) }; addingSetFor = null }, isNew = true) }
     addingExerciseTo?.let { workout -> val existing by dao.observeExercises(workout.id).collectAsState(initial = emptyList()); ExerciseCatalogDialog(existing.map { it.name }.toSet(), { addingExerciseTo = null }) { name -> scope.launch { dao.insertExercise(ExerciseEntity(workoutId = workout.id, name = name)) }; addingExerciseTo = null } }
     exerciseGuideName?.let { name -> ExerciseDetailsDialog(name) { exerciseGuideName = null } }
     programPickerFor?.let { workout -> ProgramPickerDialog(dao, { programPickerFor = null }) { program -> scope.launch { program.exercises.sortedBy { it.position }.forEach { item -> dao.insertExercise(ExerciseEntity(workoutId = workout.id, name = item.name, targetSets = item.targetSets, targetReps = item.targetReps)) } }; programPickerFor = null; details = workout } }
