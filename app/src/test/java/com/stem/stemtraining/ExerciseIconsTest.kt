@@ -6,6 +6,10 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ExerciseIconsTest {
+    @Test fun standingDumbbellCalfRaiseUsesDedicatedImage(){
+        assertEquals(R.drawable.exercise_standing_dumbbell_calf_raise,exerciseIcon("Подъём на носки стоя · гантели"))
+        assertEquals(R.drawable.exercise_calf_raise,exerciseIcon("Подъём на носки стоя"))
+    }
     @Test fun screenshotExerciseVariantsHaveDedicatedImages(){
         val names=listOf(
             "Подъём на носки сидя · тренажёр",
